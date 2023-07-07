@@ -1,0 +1,72 @@
+version: '3.2'
+
+services:
+  web:
+    build: .
+    restart: always                                                                                                     
+    volumes:
+      - staticfiles:/opt/application/webapp/staticfiles
+      - type: bind
+        source: ./media
+        target: /opt/application/webapp/media
+        volume:
+          nocopy: true
+    ports: # docker (8000) > gunicorn (8000)
+      - 8000
+    env_file:
+      - ./.dockerenvfile
+    depends_on:
+      - db
+      - redis
+
+  redis:
+    image: 'redis:6'
+    ports:
+      - 6379
+  
+  db:
+    image: mysql:8.0.33
+    restart: always
+    env_file:
+      - ./.dockerenvfile
+    ports:
+      # <Port exposed> : < MySQL Port running inside container>
+      - 3306
+    #expose:
+      # Opens port 3306 on the container
+      #- '3306'
+      # Where our data will be persisted
+    volumes:
+      - ./my-db:/var/lib/mysql
+
+  nginx:
+    build: ./nginx
+    restart: always                                                                                                     
+    ports: # docker (8080) > nginx (80)
+      - 80:80
+    volumes:
+      - staticfiles:/opt/application/webapp/staticfiles
+      - type: bind
+        source: ./media
+        target: /opt/application/webapp/media
+        volume:
+          nocopy: true
+    depends_on:
+      - web
+  
+  celery:
+    restart: always
+    build:
+      context: .
+      dockerfile: celery_Dockerfile
+    command: celery -A app worker -l info
+    env_file:
+      - ./.dockerenvfile
+    depends_on:
+      - db
+      - redis
+
+# Names our volume
+volumes:
+  my-db:
+  staticfiles:
